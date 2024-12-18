@@ -1,60 +1,73 @@
 // server.js
 const express = require("express");
+const path = require("path");
+const cors = require("cors");
+const helmet = require("helmet");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
-const path = require("path");
-const helmet = require("helmet");
-const config = require("./config/config");
-const authenticateAPIKey = require("./middleware/authenticateAPIKey");
-const errorHandler = require("./middleware/errorHandler");
-const logger = require("./utils/logger");
-
-// Import Routes
-const generateUrlRoute = require("./routes/generateUrl");
-const serveHLSRoute = require("./routes/serveHLS");
-const dynamicPlaylistRoute = require("./routes/dynamicPlaylist");
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-// ------------------------ Middleware ------------------------
 
-// Secure HTTP headers
 app.use(helmet());
 
-// HTTP request logging with morgan integrated with winston
-app.use(morgan("combined", { stream: { write: (message) => logger.info(message.trim()) } }));
+app.use(cors({
+  origin: "*"
+}));
 
-// Rate Limiting: Apply to /generate-url route
-const generateUrlLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again after 15 minutes.",
-  handler: (req, res) => {
-    logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-    res.status(429).json({ error: "Too many requests, please try again later." });
-  }
+app.use(morgan("combined"));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 1000, 
+  message: "Too many requests from this IP, please try again after 15 minutes."
 });
-app.use("/generate-url", authenticateAPIKey, generateUrlLimiter);
+app.use(limiter);
 
-// Health Check Route
 app.get("/health", (req, res) => {
   res.status(200).send("Server is running!");
 });
 
-// Generate Signed URL Route (Protected by API Key and Rate Limiting)
-app.use("/generate-url", generateUrlRoute);
+app.get("/hls/*", (req, res) => {
+  const requestedPath = req.params[0]; 
 
-// Serve Dynamic Playlists
-app.use("/hls", dynamicPlaylistRoute);
+  const safePath = path.normalize(requestedPath).replace(/^(\.\.(\/|\\|$))+/, '');
 
-// Serve Other HLS Files (Protected by Signed URL Verification)
-app.use("/hls", serveHLSRoute);
+  const hlsDirectory = path.resolve(__dirname, "hls");
+  const filePath = path.resolve(hlsDirectory, safePath);
 
-// Centralized Error Handling Middleware
-app.use(errorHandler);
+  if (!filePath.startsWith(hlsDirectory)) {
+    return res.status(403).json({ error: "Access denied." });
+  }
 
-// ------------------------ Start Server ------------------------
+  if (filePath.endsWith(".m3u8")) {
+    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+  } else if (filePath.endsWith(".ts")) {
+    res.setHeader("Content-Type", "video/mp2t");
+  } else if (filePath.endsWith(".vtt")) {
+    res.setHeader("Content-Type", "text/vtt");
+  } else {
+    return res.status(400).json({ error: "Unsupported file type." });
+  }
 
-app.listen(config.port, () => {
-  logger.info(`HLS server running at http://localhost:${config.port}`);
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      console.error(`Error serving file ${requestedPath}:`, err);
+      res.status(404).json({ error: "File not found." });
+    }
+  });
+});
+
+app.use((req, res, next) => {
+  res.status(404).json({ error: "Endpoint not found." });
+});
+
+app.use((err, req, res, next) => {
+  console.error("Internal Server Error:", err);
+  res.status(500).json({ error: "Internal Server Error." });
+});
+
+app.listen(PORT, () => {
+  console.log(`HLS server running at http://localhost:${PORT}`);
 });
