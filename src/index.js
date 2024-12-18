@@ -136,10 +136,33 @@ app.get("/hls/*", (req, res) => {
     return res.status(403).json({ error: "Invalid or expired signature." });
   }
 
-  // Determine Content-Type based on file extension
+  // Serve Playlist Files Dynamically
   if (filePath.endsWith(".m3u8")) {
+    console.log("DEBUG: Serving playlist with updated URIs...");
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
-  } else if (filePath.endsWith(".ts")) {
+
+    // Read the playlist file and replace relative URIs with signed URLs
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    fs.readFile(filePath, "utf8", (err, data) => {
+      if (err) {
+        console.error(`Error reading playlist file ${filePath}:`, err);
+        return res.status(500).json({ error: "Internal Server Error." });
+      }
+
+      // Replace relative URIs with signed URLs
+      const updatedPlaylist = data.replace(/(.*?\.(m3u8|ts|vtt))/g, (match) => {
+        const signedFileUrl = generateSignedUrl(`/hls/${safePath.split("/").slice(0, -1).join("/")}/${match}`, 3600, req);
+        console.log(`DEBUG: Replacing ${match} with ${signedFileUrl}`);
+        return signedFileUrl;
+      });
+
+      res.send(updatedPlaylist);
+    });
+    return;
+  }
+
+  // Serve Static HLS Files (e.g., segments, subtitles)
+  if (filePath.endsWith(".ts")) {
     res.setHeader("Content-Type", "video/mp2t");
   } else if (filePath.endsWith(".vtt")) {
     res.setHeader("Content-Type", "text/vtt");
@@ -147,7 +170,6 @@ app.get("/hls/*", (req, res) => {
     return res.status(400).json({ error: "Unsupported file type." });
   }
 
-  // Serve the file
   res.sendFile(filePath, (err) => {
     if (err) {
       console.error(`Error serving file ${requestedPath}:`, err);
@@ -155,6 +177,7 @@ app.get("/hls/*", (req, res) => {
     }
   });
 });
+
 
 // Catch-All for Undefined Routes
 app.use((req, res, next) => {
