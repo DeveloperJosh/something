@@ -6,7 +6,9 @@ const { generateSignature } = require("../utils/signature");
  * Ensures that the URL has not expired and the signature is valid.
  */
 function verifySignedURL(req, res, next) {
-  const file = req.params.file;
+  // Extract the requested file path relative to the hls directory
+  const requestedPath = req.params[0]; // e.g., 'folder/master.m3u8'
+
   const { expires, signature } = req.query;
 
   if (!expires || !signature) {
@@ -20,7 +22,7 @@ function verifySignedURL(req, res, next) {
     return res.status(403).json({ error: "URL has expired." });
   }
 
-  const expectedSignature = generateSignature(file, expires);
+  const expectedSignature = generateSignature(requestedPath, expires);
   if (signature !== expectedSignature) {
     return res.status(403).json({ error: "Invalid signature." });
   }
