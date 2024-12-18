@@ -23,5 +23,8 @@
     "multer": "^1.4.5-lts.1",
     "uuid": "^11.0.3",
     "winston": "^3.17.0"
+  },
+  "bin": {
+    "hls-backend": "./src/cli.js"
   }
 }
