@@ -84,7 +84,7 @@ app.get("/generate-url", (req, res) => {
 
   const expires = parseInt(expiresIn, 10) || 3600; // Default to 1 hour
   const signedUrl = generateSignedUrl(file, expires);
-  res.json({ url: `http://localhost:${PORT}/hls/${signedUrl}` });
+  res.json({ signedUrl });
 });
 
 // Serve HLS Files with Signed URL Validation
