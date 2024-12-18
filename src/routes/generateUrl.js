@@ -10,7 +10,7 @@ const router = express.Router();
 /**
  * Function to create a signed URL with expiration and signature.
  * @param {object} req - The request object.
- * @param {string} fullPath - The full relative path to the file (e.g., 'folder/master.m3u8').
+ * @param {string} fullPath - The full relative path to the file (e.g., 'folder1/master.m3u8').
  * @returns {string} - The signed URL.
  */
 function createSignedURL(req, fullPath) {
@@ -32,7 +32,7 @@ router.get("/", (req, res) => {
 
   // Normalize the file path to prevent path traversal
   const normalizedPath = path.normalize(file).replace(/^(\.\.(\/|\\|$))+/, '');
-  
+
   // Ensure the file exists in the 'hls' directory
   const filePath = path.join(__dirname, "../hls", normalizedPath);
   if (!fs.existsSync(filePath)) {
